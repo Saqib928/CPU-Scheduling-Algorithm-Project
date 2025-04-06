@@ -8,7 +8,7 @@ using namespace std;
 /** Global Constants **/
 const string TRACE = "trace";
 const string SHOW_STATISTICS = "stats";
-const string ALGORITHMS[9] = {"", "FCFS", "RR-", "SPN", "SRT", "HRRN", "FB-1", "FB-2i", "AGING"};
+const string ALGORITHMS[5] = {"", "FCFS", "RR-", "SPN", "SRT"};
 
 bool sortByServiceTime(const tuple<string, int, int> &a, const tuple<string, int, int> &b)
 {
@@ -211,177 +211,6 @@ void shortestRemainingTime()
     fillInWaitTime();
 }
 
-void highestResponseRatioNext()
-{
-
-    // Vector of tuple <process_name, process_response_ratio, time_in_service> for processes that are in the ready queue
-    vector<tuple<string, double, int>> present_processes;
-    int j=0;
-    for (int current_instant = 0; current_instant < last_instant; current_instant++)
-    {
-        while(j<process_count && getArrivalTime(processes[j])<=current_instant){
-            present_processes.push_back(make_tuple(getProcessName(processes[j]), 1.0, 0));
-            j++;
-        }
-        // Calculate response ratio for every process
-        for (auto &proc : present_processes)
-        {
-            string process_name = get<0>(proc);
-            int process_index = processToIndex[process_name];
-            int wait_time = current_instant - getArrivalTime(processes[process_index]);
-            int service_time = getServiceTime(processes[process_index]);
-            get<1>(proc) = calculate_response_ratio(wait_time, service_time);
-        }
-
-        // Sort present processes by highest to lowest response ratio
-        sort(all(present_processes), descendingly_by_response_ratio);
-
-        if (!present_processes.empty())
-        {
-            int process_index = processToIndex[get<0>(present_processes[0])];
-            while(current_instant<last_instant && get<2>(present_processes[0]) != getServiceTime(processes[process_index])){
-                timeline[current_instant][process_index]='*';
-                current_instant++;
-                get<2>(present_processes[0])++;
-            }
-            current_instant--;
-            present_processes.erase(present_processes.begin());
-            finishTime[process_index] = current_instant + 1;
-            turnAroundTime[process_index] = finishTime[process_index] - getArrivalTime(processes[process_index]);
-            normTurn[process_index] = (turnAroundTime[process_index] * 1.0 / getServiceTime(processes[process_index]));
-        }
-    }
-    fillInWaitTime();
-}
-
-void feedbackQ1()
-{
-    priority_queue<pair<int, int>, vector<pair<int, int>>, greater<pair<int, int>>> pq; //pair of priority level and process index
-    unordered_map<int,int>remainingServiceTime; //map from process index to the remaining service time
-    int j=0;
-    if(getArrivalTime(processes[0])==0){
-        pq.push(make_pair(0,j));
-        remainingServiceTime[j]=getServiceTime(processes[j]);
-        j++;
-    }
-    for(int time =0;time<last_instant;time++){
-        if(!pq.empty()){
-            int priorityLevel = pq.top().first;
-            int processIndex =pq.top().second;
-            int arrivalTime = getArrivalTime(processes[processIndex]);
-            int serviceTime = getServiceTime(processes[processIndex]);
-            pq.pop();
-            while(j<process_count && getArrivalTime(processes[j])==time+1){
-                    pq.push(make_pair(0,j));
-                    remainingServiceTime[j]=getServiceTime(processes[j]);
-                    j++;
-            }
-            remainingServiceTime[processIndex]--;
-            timeline[time][processIndex]='*';
-            if(remainingServiceTime[processIndex]==0){
-                finishTime[processIndex]=time+1;
-                turnAroundTime[processIndex] = (finishTime[processIndex] - arrivalTime);
-                normTurn[processIndex] = (turnAroundTime[processIndex] * 1.0 / serviceTime);
-            }else{
-                if(pq.size()>=1)
-                    pq.push(make_pair(priorityLevel+1,processIndex));
-                else
-                    pq.push(make_pair(priorityLevel,processIndex));
-            }
-        }
-        while(j<process_count && getArrivalTime(processes[j])==time+1){
-                pq.push(make_pair(0,j));
-                remainingServiceTime[j]=getServiceTime(processes[j]);
-                j++;
-        }
-    }
-    fillInWaitTime();
-}
-
-void feedbackQ2i()
-{
-    priority_queue<pair<int, int>, vector<pair<int, int>>, greater<pair<int, int>>> pq; //pair of priority level and process index
-    unordered_map<int,int>remainingServiceTime; //map from process index to the remaining service time
-    int j=0;
-    if(getArrivalTime(processes[0])==0){
-        pq.push(make_pair(0,j));
-        remainingServiceTime[j]=getServiceTime(processes[j]);
-        j++;
-    }
-    for(int time =0;time<last_instant;time++){
-        if(!pq.empty()){
-            int priorityLevel = pq.top().first;
-            int processIndex =pq.top().second;
-            int arrivalTime = getArrivalTime(processes[processIndex]);
-            int serviceTime = getServiceTime(processes[processIndex]);
-            pq.pop();
-            while(j<process_count && getArrivalTime(processes[j])<=time+1){
-                    pq.push(make_pair(0,j));
-                    remainingServiceTime[j]=getServiceTime(processes[j]);
-                    j++;
-            }
-
-            int currentQuantum = pow(2,priorityLevel);
-            int temp = time;
-            while(currentQuantum && remainingServiceTime[processIndex]){
-                currentQuantum--;
-                remainingServiceTime[processIndex]--;
-                timeline[temp++][processIndex]='*';
-            }
-
-            if(remainingServiceTime[processIndex]==0){
-                finishTime[processIndex]=temp;
-                turnAroundTime[processIndex] = (finishTime[processIndex] - arrivalTime);
-                normTurn[processIndex] = (turnAroundTime[processIndex] * 1.0 / serviceTime);
-            }else{
-                if(pq.size()>=1)
-                    pq.push(make_pair(priorityLevel+1,processIndex));
-                else
-                    pq.push(make_pair(priorityLevel,processIndex));
-            }
-            time = temp-1;
-        }
-        while(j<process_count && getArrivalTime(processes[j])<=time+1){
-                pq.push(make_pair(0,j));
-                remainingServiceTime[j]=getServiceTime(processes[j]);
-                j++;
-        }
-    }
-    fillInWaitTime();
-}
-
-void aging(int originalQuantum)
-{
-    vector<tuple<int,int,int>>v; //tuple of priority level, process index and total waiting time
-    int j=0,currentProcess=-1;
-    for(int time =0;time<last_instant;time++){
-        while(j<process_count && getArrivalTime(processes[j])<=time){
-            v.push_back(make_tuple(getPriorityLevel(processes[j]),j,0));
-            j++;
-        }
-
-        for(int i=0;i<v.size();i++){
-            if(get<1>(v[i])==currentProcess){
-                get<2>(v[i])=0;
-                get<0>(v[i])=getPriorityLevel(processes[currentProcess]);
-            }
-            else{
-                get<0>(v[i])++;
-                get<2>(v[i])++;
-            }
-        }
-        sort(v.begin(),v.end(),byPriorityLevel);
-        currentProcess=get<1>(v[0]);
-        int currentQuantum = originalQuantum;
-        while(currentQuantum-- && time<last_instant){
-            timeline[time][currentProcess]='*';
-            time++;
-        }
-        time--;
-    }
-    fillInWaitTime();
-}
-
 void printAlgorithm(int algorithm_index)
 {
     int algorithm_id = algorithms[algorithm_index].first - '0';
@@ -500,22 +329,6 @@ void execute_algorithm(char algorithm_id, int quantum,string operation)
     case '4':
         if(operation==TRACE)cout<<"SRT   ";
         shortestRemainingTime();
-        break;
-    case '5':
-        if(operation==TRACE)cout<<"HRRN  ";
-        highestResponseRatioNext();
-        break;
-    case '6':
-        if(operation==TRACE)cout<<"FB-1  ";
-        feedbackQ1();
-        break;
-    case '7':
-        if(operation==TRACE)cout<<"FB-2i ";
-        feedbackQ2i();
-        break;
-    case '8':
-        if(operation==TRACE)cout<<"Aging ";
-        aging(quantum);
         break;
     default:
         break;
